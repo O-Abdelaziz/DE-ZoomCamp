@@ -1,0 +1,48 @@
+id: taxi_data_etl
+namespace: homework
+description: ETL pipeline for NYC Taxi data
+
+inputs:
+  - id: taxi
+    type: STRING
+    defaults: yellow
+    description: Taxi type (yellow or green)
+  
+  - id: year
+    type: STRING
+    defaults: "2020"
+    description: Year to process
+  
+  - id: month
+    type: STRING
+    defaults: "01"
+    description: Month to process (01-12)
+
+variables:
+  file: "{{inputs.taxi}}_tripdata_{{inputs.year}}-{{inputs.month}}.csv"
+  url: "https://github.com/DataTalksClub/nyc-tlc-data/releases/download/{{inputs.taxi}}/{{inputs.taxi}}_tripdata_{{inputs.year}}-{{inputs.month}}.csv.gz"
+
+tasks:
+  - id: download
+    type: io.kestra.plugin.core.http.Download
+    uri: "{{vars.url}}"
+    
+  - id: extract
+    type: io.kestra.plugin.compress.ArchiveDecompress
+    algorithm: GZIP
+    from: "{{outputs.download.uri}}"
+    
+  - id: get_file_info
+    type: io.kestra.plugin.scripts.shell.Commands
+    commands:
+      - ls -lh {{outputs.extract.files[vars.file]}}
+      - wc -l {{outputs.extract.files[vars.file]}}
+      
+  - id: count_rows
+    type: io.kestra.plugin.scripts.shell.Commands
+    commands:
+      - echo "File: {{vars.file}}"
+      - ROWS=$(wc -l < {{outputs.extract.files[vars.file]}})
+      - ROWS=$((ROWS - 1))
+      - echo "Total rows (excluding header): $ROWS"
+      - echo "::output::rowCount::$ROWS"
